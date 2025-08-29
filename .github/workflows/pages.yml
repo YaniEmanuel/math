@@ -1,0 +1,38 @@
+name: Deploy sitio estático a GitHub Pages
+
+on:
+  push:
+    branches: [ "main" ]   # se ejecuta cuando hay push en main
+  workflow_dispatch:       # opción para correrlo manualmente desde Actions
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Subir artefacto (archivos estáticos)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."   # publica todo el repo (asegurate de tener index.html en raíz)
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}   # <-- acá queda la URL visible
+    steps:
+      - name: Deploy a GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
