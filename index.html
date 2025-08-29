@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Inecuaciones con Valor Absoluto — Generador</title>
+  <style>
+    :root{--azul:#0b3b6a;--azul2:#0f5fb3;--ok:#2e7d32;--mal:#c62828;--gris:#666}
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;margin:0;background:#f6f7f9;color:#222}
+    header,footer{background:var(--azul);color:#fff;text-align:center;padding:16px}
+    .wrap{max-width:900px;margin:auto;padding:16px}
+    .panel{background:#fff;margin:12px 0;padding:16px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+    h1{margin:.25rem 0}
+    .subtitle{margin:0;opacity:.95}
+    label{margin-right:10px;display:inline-flex;gap:.5rem;align-items:center}
+    select,input[type="checkbox"]{transform:translateY(1px)}
+    button{border:1px solid var(--azul2);background:var(--azul2);color:#fff;padding:8px 14px;border-radius:8px;cursor:pointer}
+    button:disabled{background:#c9ccd3;border-color:#b6bac2;color:#fff;cursor:not-allowed}
+    .status{display:flex;gap:16px;align-items:center;margin-top:10px}
+    #timer{font-weight:700}
+    .muted{color:var(--gris)}
+    /* Opciones */
+    #lista-opciones{padding-left:20px;margin:0}
+    #lista-opciones .opt{
+      display:block;width:100%;margin:6px 0;text-align:left;padding:10px 12px;
+      border-radius:8px;border:1px solid #d7dbe2;background:#fbfbfc;color:#222; /* <- texto oscuro, visible */
+      cursor:pointer
+    }
+    #lista-opciones .opt:disabled{opacity:1;color:#222} /* que no se “apaguen” al bloquearlas */
+    .is-selected{outline:2px solid var(--azul)}
+    .is-correct{background:#e8f5e9 !important;border-color:var(--ok);color:#1b5e20}
+    .is-wrong{background:#ffebee !important;border-color:var(--mal);color:#b71c1c}
+    /* Recta real */
+    #grafico{position:relative;margin-top:16px;border-top:3px solid #111;height:64px;background:linear-gradient(to right,transparent 50%,transparent 50%)}
+    .mark{position:absolute;top:-10px;width:16px;height:16px;border:3px solid #d32f2f;border-radius:50%;background:#fff;transform:translateX(-50%)}
+    .mark.filled{background:#d32f2f}
+    .seg{position:absolute;top:-2px;height:4px;background:#d32f2f}
+    .legend{font-size:12px;position:absolute;top:18px;transform:translateX(-50%);color:#222}
+    footer p{margin:0}
+  </style>
+</head>
+<body>
+  <header class="wrap header">
+    <h1>Inecuaciones con Valor Absoluto</h1>
+    <p class="subtitle">Generador de ejercicios con explicación paso a paso y recta real</p>
+  </header>
+
+  <main class="wrap">
+    <!-- Controles -->
+    <section class="panel">
+      <label>Dificultad:
+        <select id="sel-dificultad">
+          <option value="facil">Fácil</option>
+          <option value="media" selected>Media</option>
+          <option value="dificil">Difícil</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="chk-timer"> Timer 5 min</label>
+      <button id="btn-nuevo">Nuevo ejercicio</button>
+      <div class="status">
+        <div id="timer">⏱ 05:00</div>
+        <div id="msg" class="muted">Listo para generar.</div>
+      </div>
+    </section>
+
+    <!-- Enunciado -->
+    <section class="panel">
+      <h2>Enunciado</h2>
+      <p id="enunciado">—</p>
+    </section>
+
+    <!-- Opciones -->
+    <section class="panel">
+      <h2>Opciones</h2>
+      <ol id="lista-opciones"></ol>
+      <div class="actions" style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <button id="btn-comprobar" disabled>Comprobar</button>
+        <button id="btn-solucion" disabled>Mostrar solución</button>
+        <button id="btn-siguiente" disabled>Siguiente</button>
+      </div>
+      <div id="feedback" class="muted">Elegí una opción y después comprobá.</div>
+    </section>
+
+    <!-- Solución -->
+    <section class="panel">
+      <h2>Solución paso a paso</h2>
+      <ol id="pasos"><li class="muted">Todavía no hay nada generado.</li></ol>
+      <div>
+        <h3>Recta real</h3>
+        <div id="grafico" aria-label="Representación en recta real"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap footer">
+    <p>By <strong>Yani Castillo</strong></p>
+  </footer>
+
+  <script>
+    // =========================
+    // Helpers mínimos
+    // =========================
+    const Utils = {
+      randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; },
+      formatTime(s){ const mm=String(Math.floor(s/60)).padStart(2,"0"); const ss=String(s%60).padStart(2,"0"); return `${mm}:${ss}`; },
+      shuffle(arr){
+        for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
+        return arr;
+      }
+    };
+
+    // =========================
+    // Generador y solución (real)
+    // =========================
+    // Forma didáctica: |x - h|  ?  c  con c>0
+    function generarInecuacion(dif){
+      const h = Utils.randInt(-6,6);
+      const c = (dif==="facil") ? Utils.randInt(1,4)
+              : (dif==="dificil") ? Utils.randInt(5,9)
+              : Utils.randInt(2,7);
+      const ops = ["<","<=",">",">="];
+      const op  = ops[Utils.randInt(0,ops.length-1)];
+      const enunciado = `|x ${h>=0? "-" : "+"} ${Math.abs(h)}| ${op} ${c}`;
+
+      const L = h - c;   // límite izquierdo
+      const R = h + c;   // límite derecho
+
+      const pasos = [];
+      let solucion = "";
+      let partes = []; // para dibujar exactamente lo que corresponde
+
+      if(op === "<" || op === "<="){
+        const abierto = (op === "<");
+        pasos.push(`Partimos de: ${enunciado}`);
+        pasos.push(`Desdoblo: -${c} ${op} x - ${h} ${op} ${c}`);
+        pasos.push(`Sumo ${h} en los tres lados: ${L} ${op} x ${op} ${R}`);
+        pasos.push(`Queda un intervalo entre ${L} y ${R} ${abierto? "abierto":"cerrado"} en ambos extremos.`);
+
+        const a = abierto ? "(" : "[";
+        const b = abierto ? ")" : "]";
+        solucion = `x ∈ ${a}${L}, ${R}${b}`;
+        partes = [{tipo:"segmento", desde:L, hasta:R, cerradoIzq:!abierto, cerradoDer:!abierto}];
+      }else{
+        const cerrado = (op === ">=");
+        pasos.push(`Partimos de: ${enunciado}`);
+        pasos.push(`Dos casos: x - ${h} ${op} ${c}  ó  x - ${h} ${op} -${c}`);
+        pasos.push(`Sumando ${h}: x ${op} ${R}  ó  x ${op} ${L}`);
+        pasos.push(`Son dos rayos: x ${cerrado?"≥":">"} ${R}  y  x ${cerrado?"≤":"<"} ${L}.`);
+
+        solucion = cerrado
+          ? `x ∈ (-∞, ${L}] ∪ [${R}, ∞)`
+          : `x ∈ (-∞, ${L}) ∪ (${R}, ∞)`;
+
+        partes = [
+          {tipo:"rayo-izq", hasta:L, cerrado:cerrado},
+          {tipo:"rayo-der", desde:R, cerrado:cerrado},
+        ];
+      }
+
+      // Distractores plausibles (errores típicos)
+      const interior = `x ∈ (${L}, ${R})`;
+      const cerradoAmbos = `x ∈ [${L}, ${R}]`;
+      const rayoIzq = `x ∈ (-∞, ${R})`;
+      const rayoDer = `x ∈ (${L}, ∞)`;
+
+      let opciones = (op===">"||op===">=")
+        ? [solucion, interior, cerradoAmbos, `x ∈ (-∞, ${L}) ∪ (${R}, ∞)`] // última: unión abierta
+        : [solucion, cerradoAmbos, interior, rayoIzq];
+
+      // Eliminar duplicados y dejar 4
+      opciones = Array.from(new Set(opciones)).slice(0,4);
+      while(opciones.length<4) opciones.push(rayoDer);
+
+      // Mezclar manteniendo índice de la correcta
+      const indices = Utils.shuffle([0,1,2,3].slice(0,opciones.length));
+      const opcionesMez = indices.map(i=>opciones[i]);
+      const correcta = indices.indexOf(0);
+
+      // Dibujo exacto según 'partes'
+      function draw(container){
+        container.innerHTML = "";
+        // Rango adaptativo (que los extremos entren cómodos)
+        const margen = Math.max(2, Math.ceil((R-L)*0.4));
+        const minX = Math.min(L, R) - margen;
+        const maxX = Math.max(L, R) + margen;
+        const w = container.clientWidth || 700;
+        const map = x => ((x - minX) / (maxX - minX)) * w;
+
+        // Piezas
+        partes.forEach(p=>{
+          if(p.tipo==="segmento"){
+            const seg = document.createElement("div");
+            seg.className = "seg";
+            seg.style.left  = map(p.desde) + "px";
+            seg.style.width = Math.max(2, map(p.hasta) - map(p.desde)) + "px";
+            container.appendChild(seg);
+            marca(p.desde, p.cerradoIzq);
+            marca(p.hasta, p.cerradoDer);
+          }else if(p.tipo==="rayo-izq"){
+            const seg = document.createElement("div");
+            seg.className = "seg";
+            seg.style.left  = "0px";
+            seg.style.width = Math.max(2, map(p.hasta)) + "px";
+            container.appendChild(seg);
+            marca(p.hasta, p.cerrado);
+          }else if(p.tipo==="rayo-der"){
+            const seg = document.createElement("div");
+            seg.className = "seg";
+            seg.style.left  = map(p.desde) + "px";
+            seg.style.width = Math.max(2, w - map(p.desde)) + "px";
+            container.appendChild(seg);
+            marca(p.desde, p.cerrado);
+          }
+        });
+
+        function marca(x, cerrado){
+          const m = document.createElement("div");
+          m.className = "mark" + (cerrado? " filled" : "");
+          m.style.left = map(x) + "px";
+          container.appendChild(m);
+          const lab = document.createElement("div");
+          lab.className = "legend";
+          lab.style.left = map(x) + "px";
+          lab.textContent = x;
+          container.appendChild(lab);
+        }
+      }
+
+      return { enunciado, opciones: opcionesMez, correcta, pasos, draw, L, R, op };
+    }
+
+    // =========================
+    // App (UI, timer, eventos)
+    // =========================
+    (function(){
+      const $ = s => document.querySelector(s);
+      const on = (el,ev,fn)=> el && el.addEventListener(ev,fn);
+
+      const selDific = $("#sel-dificultad");
+      const chkTimer = $("#chk-timer");
+      const btnNuevo = $("#btn-nuevo");
+      const btnComp  = $("#btn-comprobar");
+      const btnSol   = $("#btn-solucion");
+      const btnSig   = $("#btn-siguiente");
+
+      const lblTimer = $("#timer");
+      const lblMsg   = $("#msg");
+      const elEnun   = $("#enunciado");
+      const elOps    = $("#lista-opciones");
+      const elFeed   = $("#feedback");
+      const elPasos  = $("#pasos");
+      const elGraf   = $("#grafico");
+
+      let ejercicio=null, seleccion=null, timeLeft=300, timerId=null;
+
+      function nuevo(){
+        limpiar();
+        ejercicio = generarInecuacion(selDific.value);
+        render(ejercicio);
+      }
+
+      function render(ej){
+        elEnun.textContent = ej.enunciado;
+        elOps.innerHTML = ej.opciones.map((t,i)=>`<li><button class="opt" data-i="${i}">${t}</button></li>`).join("");
+        seleccion=null; btnComp.disabled=true; btnSol.disabled=true; btnSig.disabled=true;
+        elFeed.textContent = "Elegí una opción y después comprobá.";
+        elPasos.innerHTML = `<li class="muted">Todavía no hay nada generado.</li>`;
+        elGraf.innerHTML = ""; // limpio recta
+
+        elOps.querySelectorAll(".opt").forEach(b=>{
+          on(b,"click",()=>{
+            elOps.querySelectorAll(".opt").forEach(x=>x.classList.remove("is-selected"));
+            b.classList.add("is-selected");
+            seleccion = parseInt(b.dataset.i,10);
+            btnComp.disabled=false;
+          });
+        });
+
+        if(chkTimer.checked){ startTimer(300); } else { stopTimer(); lblTimer.textContent="⏱ 05:00"; }
+        lblMsg.textContent = "Ejercicio generado.";
+      }
+
+      function comprobar(){
+        if(seleccion==null) return;
+        elOps.querySelectorAll(".opt").forEach((b,i)=>{
+          b.disabled=true;
+          if(i===ejercicio.correcta) b.classList.add("is-correct");
+          if(i===seleccion && i!==ejercicio.correcta) b.classList.add("is-wrong");
+        });
+        elFeed.innerHTML = (seleccion===ejercicio.correcta) ? "✅ Correcto." : "❌ Incorrecto.";
+        btnSol.disabled=false; btnSig.disabled=false;
+      }
+
+      function mostrarSol(){
+        elPasos.innerHTML = ejercicio.pasos.map(p=>`<li>${p}</li>`).join("");
+        elGraf.innerHTML = "";
+        ejercicio.draw(elGraf);
+      }
+
+      function limpiar(){
+        elEnun.textContent="—";
+        elOps.innerHTML="";
+        elFeed.textContent="Elegí una opción y después comprobá.";
+        elPasos.innerHTML=`<li class="muted">Todavía no hay nada generado.</li>`;
+        btnComp.disabled=true; btnSol.disabled=true; btnSig.disabled=true;
+      }
+
+      function startTimer(s){
+        stopTimer(); timeLeft=s; updateTimer();
+        timerId=setInterval(()=>{
+          timeLeft--; updateTimer();
+          if(timeLeft<=0){
+            stopTimer();
+            elFeed.innerHTML = "⏰ Tiempo agotado. Mirá la solución.";
+            elOps.querySelectorAll(".opt").forEach(b=>b.disabled=true);
+            btnSol.disabled=false; btnSig.disabled=false;
+            mostrarSol();
+          }
+        },1000);
+      }
+      function stopTimer(){ if(timerId) clearInterval(timerId); timerId=null; }
+      function updateTimer(){ lblTimer.textContent = "⏱ " + Utils.formatTime(timeLeft); }
+
+      on(btnNuevo,"click",nuevo);
+      on(btnComp,"click",comprobar);
+      on(btnSol,"click",mostrarSol);
+      on(btnSig,"click",nuevo);
+      on(chkTimer,"change",()=>{ if(ejercicio) chkTimer.checked?startTimer(300):stopTimer(); });
+
+      // genero uno al cargar
+      nuevo();
+    })();
+  </script>
+</body>
+</html>
